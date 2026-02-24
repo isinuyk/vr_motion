@@ -1,17 +1,42 @@
 import cv2
 from config import COLOR_TEXT
 
-def draw_stats(img, frame_idx, v, vmax, wmax, amax, swing_time):
-    lines = [
-        f"Frame: {frame_idx}",
-        f"Speed: {v:.2f} m/s",
-        f"Max speed: {vmax:.2f} m/s",
-        f"Max angular vel: {wmax:.2f} rad/s",
-        f"Max accel: {amax:.2f} m/s²",
-        f"Swing duration: {swing_time:.3f} s",
-        "SPACE pause | ESC exit"
-    ]
-    y = 28
-    for l in lines:
-        cv2.putText(img, l, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.65, COLOR_TEXT, 2)
-        y += 26
+
+def draw_stats(img, stats):
+    """Draw live metrics on the video frame.
+
+    *stats* is a dict with keys corresponding to the metrics to display.
+    Missing keys are silently skipped.
+    """
+    lines = []
+
+    def _add(label, key, fmt=".2f", suffix=""):
+        val = stats.get(key)
+        if val is not None:
+            lines.append(f"{label}: {val:{fmt}}{suffix}")
+
+    _add("Frame", "frame", "d")
+    _add("Speed", "speed", ".2f", " m/s")
+    _add("Max speed", "max_speed", ".2f", " m/s")
+    _add("Max ang vel", "max_ang_vel", ".2f", " rad/s")
+    _add("Max accel", "max_accel", ".1f", " m/s^2")
+    _add("Swing time", "swing_time", ".3f", " s")
+    _add("Hip angle", "hip_angle", ".1f", " deg")
+    _add("Shoulder angle", "shoulder_angle", ".1f", " deg")
+    _add("X-factor", "x_factor", ".1f", " deg")
+    _add("Wrist angle", "wrist_angle", ".1f", " deg")
+    _add("Arc radius", "arc_radius", ".2f", " m")
+    _add("Tempo", "tempo", ".2f")
+    _add("Smoothness", "smoothness", ".2f")
+    _add("Video FPS", "video_fps", ".1f")
+
+    lines.append("SPACE pause | ESC exit")
+
+    y = 20
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 0.45
+    thickness = 1
+    for line in lines:
+        cv2.putText(img, line, (8, y), font, scale, (0, 0, 0), thickness + 2)
+        cv2.putText(img, line, (8, y), font, scale, COLOR_TEXT, thickness)
+        y += 18

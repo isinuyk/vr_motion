@@ -33,7 +33,8 @@ def is_physical(prev_p, p, dt, prev_v, max_v, max_a):
     dx = p[0] - prev_p[0]
     dy = p[1] - prev_p[1]
 
-    v = math.hypot(dx, dy) / dt
+    # Work in px/frame (dt varies with FPS; thresholds are tuned in frame units).
+    v = math.hypot(dx, dy)
 
     # Velocity gate
     if v > max_v:
@@ -41,7 +42,7 @@ def is_physical(prev_p, p, dt, prev_v, max_v, max_a):
 
     # Acceleration gate
     if prev_v is not None:
-        a = abs(v - prev_v) / dt
+        a = abs(v - prev_v)
         if a > max_a:
             return False
 
