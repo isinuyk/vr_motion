@@ -28,9 +28,13 @@ def draw_stats(img, stats):
     _add("Arc radius", "arc_radius", ".2f", " m")
     _add("Tempo", "tempo", ".2f")
     _add("Smoothness", "smoothness", ".2f")
+    _add("Path eff.", "path_efficiency", ".3f")
+    _add("Curvature RMS", "curvature_rms", ".3f", " 1/m")
     _add("Video FPS", "video_fps", ".1f")
+    if stats.get("profile"):
+        lines.append(f"Profile: {stats['profile']}")
 
-    lines.append("SPACE pause | ESC exit")
+    lines.append("SPACE pause | R realtime | S scientific | ESC exit")
 
     y = 20
     font = cv2.FONT_HERSHEY_SIMPLEX

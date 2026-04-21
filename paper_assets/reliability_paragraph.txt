@@ -1,0 +1,6 @@
+Across 71 sessions, repeatability analysis showed that smoothness_index (CV=21.5%), path_efficiency
+(CV=38.2%), downswing_peak_speed (CV=118.3%) were the most stable metrics in this dataset. In
+contrast, backswing_duration (CV=225.4%), backswing_peak_speed (CV=519.3%) showed higher between-
+session variability, which is likely influenced by recording viewpoint, occlusion, and swing-style
+heterogeneity. These results support using the lower-CV metrics as primary outcomes in the
+manuscript, while treating higher-CV metrics as secondary or exploratory endpoints.

@@ -26,6 +26,10 @@ class Kalman2D:
 
         self.initialized = False
 
+    @property
+    def base_r(self):
+        return float(self.r)
+
     def _F(self, dt):
         return np.array([
             [1, 0, dt, 0],
@@ -34,13 +38,27 @@ class Kalman2D:
             [0, 0, 0,  1]
         ])
 
+    def transition(self, dt):
+        return self._F(dt)
+
     def predict(self, dt):
         F = self._F(dt)
         self.x = F @ self.x
         self.P = F @ self.P @ F.T + self.Q_diag
         return self.x
 
-    def update(self, z, dt):
+    def predict_measurement(self, dt, r_meas=None):
+        """Return one-step predicted measurement mean/covariance without mutating state."""
+        F = self._F(dt)
+        x_pred = F @ self.x
+        P_pred = F @ self.P @ F.T + self.Q_diag
+        r = self.r if r_meas is None else float(r_meas)
+        R = np.eye(2) * r
+        z_pred = self.H @ x_pred
+        S = self.H @ P_pred @ self.H.T + R
+        return z_pred, S
+
+    def update(self, z, dt, r_meas=None):
         z = np.array(z, dtype=float).reshape(2, 1)
 
         if not self.initialized:
@@ -51,7 +69,8 @@ class Kalman2D:
 
         self.predict(dt)
 
-        R = np.eye(2) * self.r
+        r = self.r if r_meas is None else float(r_meas)
+        R = np.eye(2) * r
         y = z - self.H @ self.x
         S = self.H @ self.P @ self.H.T + R
         K = self.P @ self.H.T @ np.linalg.inv(S)

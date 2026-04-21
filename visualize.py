@@ -30,7 +30,7 @@ ax.grid(True)
 ax = axes[1, 0]
 if "tip_x_m_raw" in df.columns:
     ax.plot(df["tip_x_m_raw"], df["tip_y_m_raw"], label="Raw", color="red", alpha=0.5)
-ax.plot(df["tip_x_m"], df["tip_y_m"], label="Kalman filtered", color="green")
+ax.plot(df["tip_x_m"], df["tip_y_m"], label="Filtered (Kalman+RTS+poly)", color="green")
 ax.set_xlabel("X (m)")
 ax.set_ylabel("Y (m)")
 ax.set_title("Stick tip trajectory")
@@ -65,14 +65,20 @@ ax.set_title("Wrist angle (elbow-wrist-hand)")
 ax.legend(fontsize=8)
 ax.grid(True)
 
-# ---- 6. Arc radius ----
+# ---- 6. Arc radius / curvature / path efficiency ----
 ax = axes[2, 1]
 if "arc_radius_px" in df.columns:
     vals = pd.to_numeric(df["arc_radius_px"], errors="coerce")
     ax.plot(df["time_norm"], vals, label="Arc radius (px)", color="darkgreen")
+if "curvature_1_m" in df.columns:
+    vals = pd.to_numeric(df["curvature_1_m"], errors="coerce")
+    ax.plot(df["time_norm"], vals, label="Curvature (1/m)", color="brown")
+if "path_efficiency" in df.columns:
+    vals = pd.to_numeric(df["path_efficiency"], errors="coerce")
+    ax.plot(df["time_norm"], vals, label="Path efficiency", color="black", linestyle="--")
 ax.set_xlabel("Normalised swing time")
-ax.set_ylabel("Radius (px)")
-ax.set_title("Arc radius (shoulder → tip)")
+ax.set_ylabel("Value")
+ax.set_title("Arc radius / curvature / path efficiency")
 ax.legend(fontsize=8)
 ax.grid(True)
 
