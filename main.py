@@ -1,12 +1,11 @@
 import argparse
 import csv
-import importlib
 import cv2
 import tkinter as tk
 from tkinter import filedialog
 
 import config
-import swing_analyzer
+from swing_analyzer import SwingAnalyzer
 from loader import load_folder
 from stats_overlay import draw_stats
 
@@ -30,8 +29,6 @@ def parse_args():
 args = parse_args()
 config.set_filter_profile(args.profile)
 
-SwingAnalyzer = importlib.reload(swing_analyzer).SwingAnalyzer
-
 # ---- folder picker ----
 if args.folder:
     folder = args.folder
@@ -53,10 +50,10 @@ screen_w, screen_h = 1280, 720
 scale = min(screen_w / width, screen_h / height)
 display_w, display_h = int(width * scale), int(height * scale)
 
+
 def build_analyzer_with_profile(profile_name):
+    """Apply profile and create a fresh analyzer. No module reload needed — swing_analyzer reads config at runtime."""
     config.set_filter_profile(profile_name)
-    global SwingAnalyzer
-    SwingAnalyzer = importlib.reload(swing_analyzer).SwingAnalyzer
     return SwingAnalyzer(data, fps, (display_w, display_h))
 
 
@@ -64,7 +61,7 @@ PROFILE_TRAJECTORY_STYLE = {
     "realtime": {
         "raw_color": (0, 64, 255),
         "raw_thickness": 1,
-        "smooth_color": (0, 255, 255),  # yellow
+        "smooth_color": (0, 255, 255),
         "smooth_thickness": 2,
     },
     "scientific": {
@@ -91,88 +88,92 @@ def restart_run(profile_name):
 
 analyzer, run_state = restart_run(config.FILTER_PROFILE)
 
-while True:
-    if not run_state["paused"]:
-        ret, frame_img = cap.read()
-        if not ret or run_state["idx"] >= len(data):
-            break
-        frame = data[run_state["idx"]]
+try:
+    while True:
+        if not run_state["paused"]:
+            ret, frame_img = cap.read()
+            if not ret or run_state["idx"] >= len(data):
+                break
+            frame = data[run_state["idx"]]
 
-        pos_msec = cap.get(cv2.CAP_PROP_POS_MSEC)
-        if run_state["t0_msec"] is None:
-            run_state["t0_msec"] = pos_msec
+            pos_msec = cap.get(cv2.CAP_PROP_POS_MSEC)
+            if run_state["t0_msec"] is None:
+                run_state["t0_msec"] = pos_msec
 
-        if run_state["prev_msec"] is None:
-            run_state["dt"] = (1.0 / fps) if fps and fps > 0 else (1.0 / 30.0)
-        else:
-            run_state["dt"] = (pos_msec - run_state["prev_msec"]) / 1000.0
-            if run_state["dt"] <= 0 or run_state["dt"] > 1.0:
+            if run_state["prev_msec"] is None:
                 run_state["dt"] = (1.0 / fps) if fps and fps > 0 else (1.0 / 30.0)
+            else:
+                run_state["dt"] = (pos_msec - run_state["prev_msec"]) / 1000.0
+                if run_state["dt"] <= 0 or run_state["dt"] > 1.0:
+                    run_state["dt"] = (1.0 / fps) if fps and fps > 0 else (1.0 / 30.0)
 
-        t = (pos_msec - run_state["t0_msec"]) / 1000.0
+            t = (pos_msec - run_state["t0_msec"]) / 1000.0
 
-        frame_resized = cv2.resize(frame_img, (display_w, display_h))
-        analyzer.process_frame(run_state["idx"], frame_resized, frame, dt=run_state["dt"], t=t)
-        style = PROFILE_TRAJECTORY_STYLE.get(
-            config.FILTER_PROFILE, PROFILE_TRAJECTORY_STYLE["scientific"]
-        )
-        analyzer.draw_trajectory(
-            frame_resized,
-            raw_color=style["raw_color"],
-            raw_thickness=style["raw_thickness"],
-            smooth_color=style["smooth_color"],
-            smooth_thickness=style["smooth_thickness"],
-        )
+            frame_resized = cv2.resize(frame_img, (display_w, display_h))
+            analyzer.process_frame(run_state["idx"], frame_resized, frame, dt=run_state["dt"], t=t)
+            style = PROFILE_TRAJECTORY_STYLE.get(
+                config.FILTER_PROFILE, PROFILE_TRAJECTORY_STYLE["scientific"]
+            )
+            analyzer.draw_trajectory(
+                frame_resized,
+                raw_color=style["raw_color"],
+                raw_thickness=style["raw_thickness"],
+                smooth_color=style["smooth_color"],
+                smooth_thickness=style["smooth_thickness"],
+            )
 
-        # ---- build stats dict for overlay ----
-        summ = analyzer.summary()
-        stats = {
-            "frame": run_state["idx"],
-            "speed": analyzer.speeds[-1],
-            "max_speed": summ.get("max_speed", 0),
-            "max_ang_vel": summ.get("max_ang_vel", 0),
-            "max_accel": summ.get("max_accel", 0),
-            "swing_time": analyzer.times[run_state["idx"]],
-            "video_fps": fps,
-            "tempo": summ.get("swing_tempo"),
-            "smoothness": summ.get("smoothness_index"),
-            "path_efficiency": summ.get("path_efficiency"),
-            "curvature_rms": summ.get("curvature_rms"),
-        }
-        stats["profile"] = config.FILTER_PROFILE
+            # ---- build stats dict for overlay ----
+            summ = analyzer.summary()
+            stats = {
+                "frame": run_state["idx"],
+                "speed": analyzer.speeds[-1],
+                "max_speed": summ.get("max_speed", 0),
+                "max_ang_vel": summ.get("max_ang_vel", 0),
+                "max_accel": summ.get("max_accel", 0),
+                "swing_time": analyzer.times[run_state["idx"]],
+                "video_fps": fps,
+                "tempo": summ.get("swing_tempo"),
+                "smoothness": summ.get("smoothness_index"),
+                "path_efficiency": summ.get("path_efficiency"),
+                "curvature_rms": summ.get("curvature_rms"),
+                "profile": config.FILTER_PROFILE,
+            }
 
-        hip = analyzer.hip_angles[-1]
-        sh = analyzer.shoulder_angles[-1]
-        xf = analyzer.x_factors[-1]
-        wa = analyzer.wrist_angles[-1]
-        ar = analyzer.arc_radii[-1]
+            hip = analyzer.hip_angles[-1]
+            sh = analyzer.shoulder_angles[-1]
+            xf = analyzer.x_factors[-1]
+            wa = analyzer.wrist_angles[-1]
+            ar = analyzer.arc_radii[-1]
 
-        if hip is not None:
-            stats["hip_angle"] = hip
-        if sh is not None:
-            stats["shoulder_angle"] = sh
-        if xf is not None:
-            stats["x_factor"] = xf
-        if wa is not None:
-            stats["wrist_angle"] = wa
-        if ar is not None and analyzer.scale_m:
-            stats["arc_radius"] = ar * analyzer.scale_m
+            if hip is not None:
+                stats["hip_angle"] = hip
+            if sh is not None:
+                stats["shoulder_angle"] = sh
+            if xf is not None:
+                stats["x_factor"] = xf
+            if wa is not None:
+                stats["wrist_angle"] = wa
+            if ar is not None and analyzer.scale_m:
+                stats["arc_radius"] = ar * analyzer.scale_m
 
-        draw_stats(frame_resized, stats)
-        cv2.imshow("VR Motion Analysis", frame_resized)
-        run_state["idx"] += 1
-        run_state["prev_msec"] = pos_msec
+            draw_stats(frame_resized, stats)
+            cv2.imshow("VR Motion Analysis", frame_resized)
+            run_state["idx"] += 1
+            run_state["prev_msec"] = pos_msec
 
-    wait_ms = int(max(1, run_state["dt"] * 1000.0)) if not run_state["paused"] else 30
-    key = cv2.waitKey(wait_ms) & 0xFF
-    if key == 27:
-        break
-    if key == 32:
-        run_state["paused"] = not run_state["paused"]
-    if key in (ord("r"), ord("R")):
-        analyzer, run_state = restart_run("realtime")
-    if key in (ord("s"), ord("S")):
-        analyzer, run_state = restart_run("scientific")
+        wait_ms = int(max(1, run_state["dt"] * 1000.0)) if not run_state["paused"] else 30
+        key = cv2.waitKey(wait_ms) & 0xFF
+        if key == 27:
+            break
+        if key == 32:
+            run_state["paused"] = not run_state["paused"]
+        if key in (ord("r"), ord("R")):
+            analyzer, run_state = restart_run("realtime")
+        if key in (ord("s"), ord("S")):
+            analyzer, run_state = restart_run("scientific")
+finally:
+    cap.release()
+    cv2.destroyAllWindows()
 
 # ---- finalize & export ----
 rows = analyzer.finalize()
@@ -189,6 +190,3 @@ with open("swing_analysis.csv", "w", newline="") as f:
     writer = csv.writer(f)
     writer.writerow(header)
     writer.writerows(rows)
-
-cap.release()
-cv2.destroyAllWindows()

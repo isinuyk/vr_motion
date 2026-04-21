@@ -7,7 +7,7 @@ def rts_smooth(states, covs, Fs):
         P_pred = Fs[k] @ Ps[k] @ Fs[k].T
         # Small regularizer to avoid numerical issues on near-singular covariances.
         P_pred = P_pred + np.eye(P_pred.shape[0]) * 1e-9
-        G = Ps[k] @ Fs[k].T @ np.linalg.inv(P_pred)
+        G = np.linalg.solve(P_pred.T, (Ps[k] @ Fs[k].T).T).T
         xs[k] = xs[k] + G @ (xs[k + 1] - Fs[k] @ xs[k])
         Ps[k] = Ps[k] + G @ (Ps[k + 1] - P_pred) @ G.T
     return xs, Ps

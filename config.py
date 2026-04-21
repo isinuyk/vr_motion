@@ -69,6 +69,9 @@ PROFILE_PRESETS = {
     },
 }
 
+# All keys that profiles are allowed to set — derived from the presets themselves.
+_PROFILE_KEYS: frozenset = frozenset().union(*PROFILE_PRESETS.values())
+
 
 def set_filter_profile(profile_name):
     """
@@ -80,8 +83,13 @@ def set_filter_profile(profile_name):
     if name not in PROFILE_PRESETS:
         raise ValueError(f"Unknown FILTER_PROFILE '{profile_name}'. Use: {sorted(PROFILE_PRESETS)}")
     FILTER_PROFILE = name
-    for key, val in PROFILE_PRESETS[name].items():
-        globals()[key] = val
+    preset = PROFILE_PRESETS[name]
+    unknown = [k for k in preset if k not in _PROFILE_KEYS]
+    if unknown:
+        raise KeyError(f"Preset '{name}' contains keys not in any known profile: {unknown}")
+    module_globals = globals()
+    for key, val in preset.items():
+        module_globals[key] = val
     return FILTER_PROFILE
 
 

@@ -1,8 +1,9 @@
 import math
 import cv2
 
+import config
 from analysis import (
-    linear_speed, angle, angular_velocity, detect_impact,
+    linear_speed, angle, angular_velocity, wrap_angle, find_impact_idx,
     segment_angle, joint_angle_3pt, midpoint, RunningMedian,
 )
 from drawing import draw_skeleton, draw_stick, draw_ball
@@ -11,31 +12,6 @@ from utils_filter import (
     smooth_trajectory_poly,
     despike_trajectory,
     is_physical,
-)
-from config import (
-    STICK_REAL_LENGTH_M,
-    MEDIAN_WIN,
-    STICK_CAL_WIN,
-    IMPACT_DIST_PX,
-    TRAJ_POLY_WIN,
-    TRAJ_POLY_DEG,
-    TRAJ_BLEND_RAW,
-    TRAJ_MAX_DEV_PX,
-    TRAJ_LAPLACE_PASSES,
-    TRAJ_LAPLACE_ALPHA,
-    TRAJ_CLOSED_DIST_PX,
-    TRAJ_CLOSED_MIN_COS,
-    TRAJ_DESPIKE_THRESH_PX,
-    TRAJ_DESPIKE_MAX_NEIGHBOR_PX,
-    TRAJ_DESPIKE_PASSES,
-    TRAJ_POST_DESPIKE_THRESH_PX,
-    TRAJ_POST_DESPIKE_MAX_NEIGHBOR_PX,
-    TRAJ_POST_DESPIKE_PASSES,
-    MAX_KF_PREDICT_GAP,
-    KF_MAX_MEAS_SPEED_PX_S,
-    KF_MAX_MEAS_ACCEL_PX_S2,
-    KF_ADAPTIVE_RESIDUAL_PX,
-    KF_ADAPTIVE_R_MULT_MAX,
 )
 from kalman import Kalman2D
 from rts_smoother import rts_smooth
@@ -80,14 +56,14 @@ class SwingAnalyzer:
 
         # ---- filters ----
         self.kalman = Kalman2D(q_pos=8.0, q_vel=8.0, r_meas=6.0)
-        self.median = MedianFilter2D(win=MEDIAN_WIN)
+        self.median = MedianFilter2D(win=config.MEDIAN_WIN)
         self.missing_tip_frames = 0
         self.prev_meas = None
         self.prev_meas_speed = None
         self.rejected_tip_frames = 0
 
         # ---- dynamic calibration ----
-        self.stick_len_median = RunningMedian(win=STICK_CAL_WIN)
+        self.stick_len_median = RunningMedian(win=config.STICK_CAL_WIN)
         self.scale_m = None
         self.scale_m_series = []
 
@@ -120,7 +96,7 @@ class SwingAnalyzer:
     def _update_calibration(self, stick_len_px):
         med = self.stick_len_median.update(stick_len_px)
         if med and med > 0:
-            raw_scale = STICK_REAL_LENGTH_M / med
+            raw_scale = config.STICK_REAL_LENGTH_M / med
             if self.scale_m is None:
                 self.scale_m = raw_scale
                 return
@@ -155,9 +131,9 @@ class SwingAnalyzer:
 
     def _adaptive_r_from_residual(self, residual_px):
         base = self.kalman.base_r
-        scale = max(float(KF_ADAPTIVE_RESIDUAL_PX), 1e-6)
+        scale = max(float(config.KF_ADAPTIVE_RESIDUAL_PX), 1e-6)
         u = max(0.0, float(residual_px)) / scale
-        mult = min(1.0 + u * u, float(KF_ADAPTIVE_R_MULT_MAX))
+        mult = min(1.0 + u * u, float(config.KF_ADAPTIVE_R_MULT_MAX))
         return base * mult
 
     def _measurement_is_valid(self, meas, dt):
@@ -170,8 +146,8 @@ class SwingAnalyzer:
             meas,
             dt,
             self.prev_meas_speed,
-            max_v=float(KF_MAX_MEAS_SPEED_PX_S),
-            max_a=float(KF_MAX_MEAS_ACCEL_PX_S2),
+            max_v=float(config.KF_MAX_MEAS_SPEED_PX_S),
+            max_a=float(config.KF_MAX_MEAS_ACCEL_PX_S2),
         )
 
     def _append_kalman_snapshot(self, dt):
@@ -221,24 +197,24 @@ class SwingAnalyzer:
             self._rts_tip_px_cache = self._rts_smoothed_points()
             self._despiked_tip_px_cache = despike_trajectory(
                 self._rts_tip_px_cache,
-                thresh_px=TRAJ_DESPIKE_THRESH_PX,
-                max_neighbor_px=TRAJ_DESPIKE_MAX_NEIGHBOR_PX,
-                passes=TRAJ_DESPIKE_PASSES,
+                thresh_px=config.TRAJ_DESPIKE_THRESH_PX,
+                max_neighbor_px=config.TRAJ_DESPIKE_MAX_NEIGHBOR_PX,
+                passes=config.TRAJ_DESPIKE_PASSES,
             )
             self._smoothed_tip_px_cache = smooth_trajectory_poly(
                 self._despiked_tip_px_cache,
-                window=TRAJ_POLY_WIN,
-                degree=TRAJ_POLY_DEG,
+                window=config.TRAJ_POLY_WIN,
+                degree=config.TRAJ_POLY_DEG,
                 raw_ref=self.tip_positions_raw,
-                raw_blend=TRAJ_BLEND_RAW,
-                max_dev_px=TRAJ_MAX_DEV_PX,
-                laplace_passes=TRAJ_LAPLACE_PASSES,
-                laplace_alpha=TRAJ_LAPLACE_ALPHA,
-                closed_dist_px=TRAJ_CLOSED_DIST_PX,
-                closed_min_cos=TRAJ_CLOSED_MIN_COS,
-                post_despike_thresh_px=TRAJ_POST_DESPIKE_THRESH_PX,
-                post_despike_max_neighbor_px=TRAJ_POST_DESPIKE_MAX_NEIGHBOR_PX,
-                post_despike_passes=TRAJ_POST_DESPIKE_PASSES,
+                raw_blend=config.TRAJ_BLEND_RAW,
+                max_dev_px=config.TRAJ_MAX_DEV_PX,
+                laplace_passes=config.TRAJ_LAPLACE_PASSES,
+                laplace_alpha=config.TRAJ_LAPLACE_ALPHA,
+                closed_dist_px=config.TRAJ_CLOSED_DIST_PX,
+                closed_min_cos=config.TRAJ_CLOSED_MIN_COS,
+                post_despike_thresh_px=config.TRAJ_POST_DESPIKE_THRESH_PX,
+                post_despike_max_neighbor_px=config.TRAJ_POST_DESPIKE_MAX_NEIGHBOR_PX,
+                post_despike_passes=config.TRAJ_POST_DESPIKE_PASSES,
             )
             self._trajectory_dirty = False
         return self._smoothed_tip_px_cache
@@ -266,7 +242,7 @@ class SwingAnalyzer:
             if meas is not None:
                 self.rejected_tip_frames += 1
             self.missing_tip_frames += 1
-            if self.kalman.initialized and self.missing_tip_frames <= MAX_KF_PREDICT_GAP:
+            if self.kalman.initialized and self.missing_tip_frames <= config.MAX_KF_PREDICT_GAP:
                 x = self.kalman.predict(dt)
             else:
                 x = None
@@ -277,7 +253,8 @@ class SwingAnalyzer:
         self._trajectory_dirty = True
         return tip_f
 
-    def _append_tip_metric(self, tip_f):
+    def _record_scale_state(self, tip_f):
+        """Append current scale estimate and compute metric-space tip position."""
         scale_i = self.scale_m
         if scale_i is None and self.scale_m_series:
             scale_i = self.scale_m_series[-1]
@@ -293,30 +270,39 @@ class SwingAnalyzer:
             t = (self.times[-1] + dt) if self.times else 0.0
         self.times.append(float(t))
 
+    @staticmethod
+    def _step_kinematics(prev_tip, tip, prev_speed, prev_ang, prev_ang_vel, prev_acc, base, scale, dt):
+        """Compute one-step kinematics. Returns (v, acc, ang, w_ang, ang_acc, jerk)."""
+        v = linear_speed(prev_tip, tip, dt) * scale
+        acc = (v - prev_speed) / dt if prev_speed is not None else 0.0
+        ang = angle(base, tip)
+        w_ang = angular_velocity(prev_ang, ang, dt) if (prev_ang is not None and ang is not None) else 0.0
+        ang_acc = (w_ang - prev_ang_vel) / dt if prev_ang_vel is not None else 0.0
+        jerk = (acc - prev_acc) / dt if prev_acc is not None else 0.0
+        return v, acc, ang, w_ang, ang_acc, jerk
+
     def _append_kinematics(self, idx, base, tip_f, dt):
         scale_i = self.scale_m_series[-1] if self.scale_m_series and self.scale_m_series[-1] else (self.scale_m or 1.0)
-        v = linear_speed(self.prev_tip, tip_f, dt) * scale_i
+        v, acc, ang, w_ang, ang_acc, jerk = self._step_kinematics(
+            self.prev_tip, tip_f, self.prev_speed, self.prev_ang,
+            self.prev_ang_vel, self.prev_acc, base, scale_i, dt,
+        )
+
         self.speeds.append(v)
         if v >= self.max_speed:
             self.max_speed = v
             self.peak_speed_idx = idx
 
-        acc = (v - self.prev_speed) / dt if self.prev_speed is not None else 0.0
         self.accels.append(acc)
         if acc >= self.max_accel:
             self.max_accel = acc
 
-        ang = angle(base, tip_f)
-        w_ang = angular_velocity(self.prev_ang, ang, dt) if (self.prev_ang is not None and ang is not None) else 0.0
         self.ang_vels.append(w_ang)
         if w_ang >= self.max_ang_vel:
             self.max_ang_vel = w_ang
 
-        ang_acc = (w_ang - self.prev_ang_vel) / dt if (dt > 0 and self.prev_ang_vel is not None) else 0.0
         self.ang_accels.append(ang_acc)
-
         self.energies.append(v * v)
-        jerk = (acc - self.prev_acc) / dt if (dt > 0 and self.prev_acc is not None) else 0.0
         self.jerks.append(jerk)
         if jerk != 0:
             self.jerk_sq_sum += jerk * jerk
@@ -346,11 +332,8 @@ class SwingAnalyzer:
         self.shoulder_angles.append(math.degrees(sh_a) if sh_a is not None else None)
 
         if hip_a is not None and sh_a is not None:
-            xf = math.degrees(sh_a) - math.degrees(hip_a)
-            while xf > 180:
-                xf -= 360
-            while xf < -180:
-                xf += 360
+            xf = wrap_angle(sh_a - hip_a)
+            xf = math.degrees(xf)
             self.x_factors.append(xf)
             if abs(xf) >= self.max_x_factor_abs:
                 self.max_x_factor_abs = abs(xf)
@@ -373,7 +356,7 @@ class SwingAnalyzer:
             dist = None
         self.tip_ball_distances.append(dist)
 
-        if self.impact_idx is None and dist is not None and dist < IMPACT_DIST_PX:
+        if self.impact_idx is None and dist is not None and dist < config.IMPACT_DIST_PX:
             self.impact_idx = idx
 
     @staticmethod
@@ -388,7 +371,6 @@ class SwingAnalyzer:
         area2 = abs(
             (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0])
         )
-        # Curvature of circumcircle through 3 points (1 / meter).
         return (2.0 * area2) / (a * b * c)
 
     @staticmethod
@@ -404,9 +386,7 @@ class SwingAnalyzer:
 
     def _compute_export_metrics(self):
         if self.impact_idx is None:
-            self.impact_idx = detect_impact(
-                self.speeds, self.accels, self.tip_ball_distances,
-            )
+            self.impact_idx = find_impact_idx(self.speeds, self.tip_ball_distances)
 
         impact = min(self.impact_idx, len(self.times) - 1)
         smoothed_tip_px = self._smooth_tip_positions()
@@ -430,12 +410,9 @@ class SwingAnalyzer:
             base_i = self.base_positions[i] if i < len(self.base_positions) else None
             scale_i = self.scale_m_series[i] if i < len(self.scale_m_series) and self.scale_m_series[i] else (self.scale_m or 1.0)
 
-            v = linear_speed(prev_tip, tip_i, dt_i) * scale_i
-            acc = (v - prev_speed) / dt_i if prev_speed is not None else 0.0
-            ang = angle(base_i, tip_i)
-            w_ang = angular_velocity(prev_ang, ang, dt_i) if (prev_ang is not None and ang is not None) else 0.0
-            ang_acc = (w_ang - prev_ang_vel) / dt_i if prev_ang_vel is not None else 0.0
-            jerk = (acc - prev_acc) / dt_i if prev_acc is not None else 0.0
+            v, acc, ang, w_ang, ang_acc, jerk = self._step_kinematics(
+                prev_tip, tip_i, prev_speed, prev_ang, prev_ang_vel, prev_acc, base_i, scale_i, dt_i,
+            )
 
             speeds_out.append(v)
             ang_vels_out.append(w_ang)
@@ -540,7 +517,7 @@ class SwingAnalyzer:
         self.tip_positions_raw.append(tip)
         self.base_positions.append(base)
         tip_f = self._update_tip_filter(tip, dt)
-        self._append_tip_metric(tip_f)
+        self._record_scale_state(tip_f)
         self._append_time(dt, t)
         self._append_kinematics(idx, base, tip_f, dt)
         self._append_biomechanics(
@@ -590,15 +567,19 @@ class SwingAnalyzer:
             )
 
     # ------------------------------------------------------------------ #
-    #  Summary metrics (computed once after all frames)
+    #  Summary metrics
     # ------------------------------------------------------------------ #
     def summary(self):
-        """Return a dict of scalar summary metrics for the swing."""
+        """Return a dict of scalar summary metrics for the swing.
+
+        Uses a cheap approximation while streaming (impact not yet known),
+        and switches to full export-metric computation once finalized.
+        """
         n = len(self.times)
         if n < 2:
             return {}
 
-        # Keep live overlay cheap while frames are still streaming.
+        # --- cheap streaming path: impact not known yet ---
         if self.impact_idx is None and n < len(self.data):
             impact = n - 1
             transition = max(0, min(self.peak_speed_idx, impact - 1))
@@ -606,8 +587,7 @@ class SwingAnalyzer:
             t_down = self.times[impact] - self.times[transition] if impact > transition else 0.0
             tempo = t_back / t_down if t_down > 0 else 0.0
 
-            # Approximate path efficiency from currently available metric-space points.
-            valid = [p for p in self.tip_positions_m[: n] if p != (0.0, 0.0)]
+            valid = [p for p in self.tip_positions_m[:n] if p != (0.0, 0.0)]
             path_len = 0.0
             if len(valid) > 1:
                 for i in range(1, len(valid)):
@@ -615,8 +595,8 @@ class SwingAnalyzer:
             disp = math.hypot(valid[-1][0] - valid[0][0], valid[-1][1] - valid[0][1]) if len(valid) > 1 else 0.0
             path_eff = disp / path_len if path_len > 1e-9 else 0.0
 
-            bs_speeds = self.speeds[: transition + 1] if transition >= 0 else []
-            ds_speeds = self.speeds[transition: impact + 1] if impact >= transition else []
+            bs_speeds = self.speeds[:transition + 1] if transition >= 0 else []
+            ds_speeds = self.speeds[transition:impact + 1] if impact >= transition else []
 
             smoothness = 0.0
             if self.jerk_nonzero_count > 0:
@@ -643,6 +623,7 @@ class SwingAnalyzer:
                 "downswing_curvature_mean": 0.0,
             }
 
+        # --- final path: use fully smoothed export metrics ---
         exp = self._get_export_metrics()
         impact = exp["impact_idx"]
         transition = exp["transition_idx"]
@@ -657,14 +638,14 @@ class SwingAnalyzer:
         t_down = self.times[impact] - self.times[transition] if impact > transition else 0.0
         tempo = t_back / t_down if t_down > 0 else 0.0
 
-        smoothness = 0.0
         jerk_nz = [j for j in jerks if abs(j) > 0.0]
+        smoothness = 0.0
         if jerk_nz:
             mean_sq_jerk = sum(j * j for j in jerk_nz) / len(jerk_nz)
             smoothness = -math.log10(mean_sq_jerk + 1e-9)
 
-        bs_speeds = speeds[: transition + 1] if transition >= 0 else []
-        ds_speeds = speeds[transition: impact + 1] if impact >= transition else []
+        bs_speeds = speeds[:transition + 1] if transition >= 0 else []
+        ds_speeds = speeds[transition:impact + 1] if impact >= transition else []
         bs_curv = [exp["curvature"][i] for i in range(0, transition + 1) if exp["curvature"][i] is not None]
         ds_curv = [exp["curvature"][i] for i in range(transition, impact + 1) if exp["curvature"][i] is not None]
 

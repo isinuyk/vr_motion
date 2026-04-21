@@ -1,5 +1,4 @@
 import argparse
-import importlib
 import itertools
 import json
 import math
@@ -10,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 import config
-import swing_analyzer
+from swing_analyzer import SwingAnalyzer
 from loader import load_folder
 
 
@@ -41,13 +40,12 @@ def _combo_dicts(grid):
         yield combo
 
 
-def _reload_analyzer_with_params(params, base_profile="scientific"):
-    importlib.reload(config)
+def _apply_params(params, base_profile="scientific"):
+    """Apply params to the live config module. No reload needed — SwingAnalyzer reads config at runtime."""
     config.set_filter_profile(base_profile)
     for k, v in params.items():
         setattr(config, k, v)
-    sa = importlib.reload(swing_analyzer)
-    return sa.SwingAnalyzer
+    return SwingAnalyzer
 
 
 def _safe_float(x, default=np.nan):
@@ -58,7 +56,7 @@ def _safe_float(x, default=np.nan):
 
 
 def _run_one_combo(data, fps, size, params, base_profile):
-    SwingAnalyzer = _reload_analyzer_with_params(params, base_profile=base_profile)
+    SwingAnalyzer = _apply_params(params, base_profile=base_profile)
     analyzer = SwingAnalyzer(data, fps, size)
 
     w, h = size

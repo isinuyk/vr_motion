@@ -14,8 +14,7 @@ class MedianFilter2D:
             return None
         self.buf_x.append(p[0])
         self.buf_y.append(p[1])
-        if len(self.buf_x) < self.win:
-            return p
+        # Always return median of available samples — warm-up smoothing improves naturally.
         return (float(np.median(self.buf_x)), float(np.median(self.buf_y)))
 
 
@@ -63,6 +62,22 @@ def _dist_point_to_segment(p, a, b):
     return math.hypot(px - qx, py - qy)
 
 
+def _clamp_to_max_dev(x_s, y_s, raw_ref, idx, max_dev_px):
+    """Clamp smoothed point to within max_dev_px of the raw reference at idx."""
+    if raw_ref is None or max_dev_px is None or max_dev_px <= 0:
+        return x_s, y_s
+    if idx >= len(raw_ref) or raw_ref[idx] is None:
+        return x_s, y_s
+    rx, ry = raw_ref[idx]
+    dx = x_s - float(rx)
+    dy = y_s - float(ry)
+    dist = math.hypot(dx, dy)
+    if dist > max_dev_px and dist > 1e-9:
+        s = max_dev_px / dist
+        return float(rx) + dx * s, float(ry) + dy * s
+    return x_s, y_s
+
+
 def despike_trajectory(points, thresh_px=16.0, max_neighbor_px=30.0, passes=1):
     """
     Remove one-frame trajectory spikes by replacing outlier point with midpoint
@@ -92,7 +107,6 @@ def despike_trajectory(points, thresh_px=16.0, max_neighbor_px=30.0, passes=1):
             if spike_dist <= t:
                 continue
 
-            # Replace by local interpolation between neighbors.
             cur[i] = (
                 0.5 * (p_prev[0] + p_next[0]),
                 0.5 * (p_prev[1] + p_next[1]),
@@ -149,6 +163,7 @@ def smooth_trajectory_poly(
             x_s = xs_s[k]
             y_s = ys_s[k]
             idx = i + k
+
             if (
                 raw_ref is not None
                 and 0.0 < raw_blend <= 1.0
@@ -159,21 +174,7 @@ def smooth_trajectory_poly(
                 x_s = (1.0 - raw_blend) * x_s + raw_blend * float(rx)
                 y_s = (1.0 - raw_blend) * y_s + raw_blend * float(ry)
 
-            if (
-                raw_ref is not None
-                and max_dev_px is not None
-                and max_dev_px > 0
-                and idx < len(raw_ref)
-                and raw_ref[idx] is not None
-            ):
-                rx, ry = raw_ref[idx]
-                dx = x_s - float(rx)
-                dy = y_s - float(ry)
-                dist = math.hypot(dx, dy)
-                if dist > max_dev_px and dist > 1e-9:
-                    s = max_dev_px / dist
-                    x_s = float(rx) + dx * s
-                    y_s = float(ry) + dy * s
+            x_s, y_s = _clamp_to_max_dev(x_s, y_s, raw_ref, idx, max_dev_px)
             out[idx] = (float(x_s), float(y_s))
 
         if laplace_passes > 0 and len(seg) >= 3:
@@ -205,11 +206,7 @@ def smooth_trajectory_poly(
 
             for _ in range(int(laplace_passes)):
                 prev_vals = out[start:end]
-                if is_closed:
-                    idx_range = range(start, end)
-                else:
-                    idx_range = range(start + 1, end - 1)
-
+                idx_range = range(start, end) if is_closed else range(start + 1, end - 1)
                 seg_len = end - start
                 for u in idx_range:
                     loc = u - start
@@ -227,22 +224,7 @@ def smooth_trajectory_poly(
                     nx, ny = prev_vals[r_loc]
                     x_s = (1.0 - a) * cx + a * 0.5 * (px + nx)
                     y_s = (1.0 - a) * cy + a * 0.5 * (py + ny)
-
-                    if (
-                        raw_ref is not None
-                        and max_dev_px is not None
-                        and max_dev_px > 0
-                        and u < len(raw_ref)
-                        and raw_ref[u] is not None
-                    ):
-                        rx, ry = raw_ref[u]
-                        dx = x_s - float(rx)
-                        dy = y_s - float(ry)
-                        dist = math.hypot(dx, dy)
-                        if dist > max_dev_px and dist > 1e-9:
-                            s = max_dev_px / dist
-                            x_s = float(rx) + dx * s
-                            y_s = float(ry) + dy * s
+                    x_s, y_s = _clamp_to_max_dev(x_s, y_s, raw_ref, u, max_dev_px)
                     out[u] = (float(x_s), float(y_s))
         i = j
 
@@ -262,34 +244,22 @@ def smooth_trajectory_poly(
 
 
 def is_physical(prev_p, p, dt, prev_v, max_v, max_a):
-    # Type safety
     if prev_p is None or p is None:
         return True
-
-    # Ensure tuples
     if not isinstance(prev_p, (tuple, list)) or not isinstance(p, (tuple, list)):
         return True
-
     if len(prev_p) < 2 or len(p) < 2:
         return True
-
     if dt is None or dt <= 1e-9:
         return True
 
     dx = p[0] - prev_p[0]
     dy = p[1] - prev_p[1]
-
-    # Work in px/s for frame-rate-independent gating.
     v = math.hypot(dx, dy) / dt
 
-    # Velocity gate
     if v > max_v:
         return False
-
-    # Acceleration gate
-    if prev_v is not None:
-        a = abs(v - prev_v) / dt
-        if a > max_a:
-            return False
+    if prev_v is not None and abs(v - prev_v) / dt > max_a:
+        return False
 
     return True
