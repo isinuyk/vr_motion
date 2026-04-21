@@ -1,6 +1,17 @@
+import bisect
 import math
 from collections import deque
+
 from config import IMPACT_DIST_PX
+
+
+def wrap_angle(da):
+    """Wrap angle difference into (-pi, pi]."""
+    while da > math.pi:
+        da -= 2 * math.pi
+    while da < -math.pi:
+        da += 2 * math.pi
+    return da
 
 
 def linear_speed(p0, p1, dt):
@@ -18,16 +29,12 @@ def angle(p0, p1):
 def angular_velocity(a0, a1, dt):
     if a0 is None or a1 is None or dt <= 0:
         return 0.0
-    da = a1 - a0
-    while da > math.pi:
-        da -= 2 * math.pi
-    while da < -math.pi:
-        da += 2 * math.pi
-    return da / dt
+    return wrap_angle(a1 - a0) / dt
 
 
-def detect_impact(speeds, accels, tip_ball_distances, threshold_px=IMPACT_DIST_PX):
-    impact_idx = speeds.index(max(speeds))
+def find_impact_idx(speeds, tip_ball_distances, threshold_px=IMPACT_DIST_PX):
+    """Return frame index of impact: nearest-to-ball frame if detectable, else peak-speed frame."""
+    impact_idx = max(range(len(speeds)), key=lambda i: speeds[i]) if speeds else 0
     for i, d in enumerate(tip_ball_distances):
         if d is not None and d < threshold_px:
             impact_idx = i
@@ -40,8 +47,7 @@ def detect_impact(speeds, accels, tip_ball_distances, threshold_px=IMPACT_DIST_P
 # ---------------------------------------------------------------------------
 
 def segment_angle(p_left, p_right):
-    """Angle (rad) of the line from p_left to p_right relative to horizontal.
-    Useful for hip line and shoulder line in the frontal plane."""
+    """Angle (rad) of the line from p_left to p_right relative to horizontal."""
     if not p_left or not p_right:
         return None
     return math.atan2(p_right[1] - p_left[1], p_right[0] - p_left[0])
@@ -69,14 +75,20 @@ def midpoint(p1, p2):
 
 
 class RunningMedian:
-    """Running median over a fixed window (for stick-length calibration)."""
+    """Running median over a fixed window using a sorted list for O(log n) updates."""
     def __init__(self, win=15):
-        self.buf = deque(maxlen=win)
+        self._maxlen = win
+        self._buf = deque()
+        self._sorted = []
 
     def update(self, val):
-        if val is not None and val > 0:
-            self.buf.append(val)
-        if not self.buf:
-            return None
-        s = sorted(self.buf)
-        return s[len(s) // 2]
+        if val is None or val <= 0:
+            return self._sorted[len(self._sorted) // 2] if self._sorted else None
+        if len(self._buf) == self._maxlen:
+            evicted = self._buf.popleft()
+            idx = bisect.bisect_left(self._sorted, evicted)
+            if idx < len(self._sorted):
+                self._sorted.pop(idx)
+        self._buf.append(val)
+        bisect.insort(self._sorted, val)
+        return self._sorted[len(self._sorted) // 2]

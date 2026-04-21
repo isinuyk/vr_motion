@@ -48,9 +48,12 @@ def main():
     _print_stats("Raw-vs-filtered trajectory deviation", dev_stats, unit="m")
 
     if "jerk" in df.columns:
-        jerk = pd.to_numeric(df["jerk"], errors="coerce")
-        rms_jerk = math.sqrt(float((jerk.fillna(0.0) ** 2).mean()))
-        print(f"RMS jerk (exported trajectory): {rms_jerk:.6f}")
+        jerk = pd.to_numeric(df["jerk"], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+        if len(jerk) > 0:
+            rms_jerk = math.sqrt(float((jerk ** 2).mean()))
+            print(f"RMS jerk (exported trajectory): {rms_jerk:.6f} ({len(jerk)} samples)")
+        else:
+            print("RMS jerk: no valid samples")
 
     over_3cm = int((pd.to_numeric(dev_m, errors="coerce") > 0.03).sum())
     over_5cm = int((pd.to_numeric(dev_m, errors="coerce") > 0.05).sum())

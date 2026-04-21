@@ -73,7 +73,8 @@ class Kalman2D:
         R = np.eye(2) * r
         y = z - self.H @ self.x
         S = self.H @ self.P @ self.H.T + R
-        K = self.P @ self.H.T @ np.linalg.inv(S)
+        # solve S^T K^T = (P H^T)^T  — avoids explicit matrix inversion
+        K = np.linalg.solve(S.T, (self.P @ self.H.T).T).T
 
         self.x = self.x + K @ y
         self.P = (np.eye(4) - K @ self.H) @ self.P
