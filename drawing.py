@@ -10,7 +10,11 @@ def safe_pt(pts, i, w, h):
     if i >= len(pts):
         return None
     p = pts[i]
-    return (int(p["x"] * w), int(p["y"] * h))
+    x = p.get("x")
+    y = p.get("y")
+    if x is None or y is None:
+        return None
+    return (int(x * w), int(y * h))
 
 
 def draw_dot(img, pt, color, r=DOT_RADIUS):

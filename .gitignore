@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+
+# Cursor/Claude ephemeral worktrees
+.claude/worktrees/
+
+# Temporary Office lock files
+~$*.docx
+article_package/~$*.docx
+
+# Local scratch/intermediate text dumps
+_orig*.txt
+_mentor*.txt
+
+# Regeneratable local analysis exports
+swing_analysis.csv
+evaluation_outputs_test/
+article_package/evaluation_outputs_test/
