@@ -27,7 +27,7 @@ Run:
     python build_second_article_docx.py \
         --manuscript article_package/second_article_manuscript.md \
         --analysis-dir second_article_outputs/v3 \
-        --output "article_package/Стаття_Аспірант_Синюк_HAIT_article2_v4.docx"
+        --output "article_package/Стаття_Аспірант_Синюк_HAIT_article2_v6.docx"
 
 Publication status: ``article_package/research_publication_status.md``
 """
@@ -53,13 +53,39 @@ DEFAULT_TEMPLATE_GLOB = "article_package/*final_v5.docx"
 DEFAULT_MANUSCRIPT = "article_package/second_article_manuscript.md"
 DEFAULT_ANALYSIS_DIR = "second_article_outputs/v3"
 DEFAULT_AGREEMENT_DIR = "second_article_outputs/annotation_agreement"
-DEFAULT_OUTPUT = "article_package/Стаття_Аспірант_Синюк_HAIT_article2_v4.docx"
+DEFAULT_OUTPUT = "article_package/Стаття_Аспірант_Синюк_HAIT_article2_v6.docx"
 
 FONT = "Times New Roman"
 COL_WIDTH_CM = 8.2
-FULL_WIDTH_CM = 16.9
+FULL_WIDTH_CM = 16.5
 INDENT_CM = 0.75
-TABLE_FONT_PT = 9
+TABLE_FONT_PT = 11
+PHOTO_DIR = Path("article_package/author_photos")
+PHOTO_WIDTH_CM = 3.0
+
+# Fig. 2 stays in-column (schematic annotation frame); other figures use full-width islands.
+FULL_WIDTH_FIGURES = {1, 3, 4, 5, 6, 7}
+
+EN_ABSTRACT_LABELS = [
+    "Relevance.",
+    "Aim of the article.",
+    "Objectives.",
+    "Methods.",
+    "Scientific novelty.",
+    "Practical significance.",
+    "Results.",
+    "Conclusions.",
+]
+UK_ABSTRACT_LABELS = [
+    "Актуальність.",
+    "Метою статті",
+    "Завдання.",
+    "Методи.",
+    "Наукова новизна.",
+    "Практична значимість.",
+    "Результати.",
+    "Висновки.",
+]
 
 
 # --------------------------------------------------------------------------- #
@@ -192,14 +218,42 @@ def add_numbered(anchor, items):
         _set_run_font(run, 11)
 
 
-def add_figure(anchor, image_path, caption_num, caption_title, source="compiled by the authors"):
+def _picture_size_cm(image_path, max_width_cm, max_height_cm=17.5):
+    """Fit image into a max box while preserving aspect ratio."""
+    from PIL import Image
+
+    with Image.open(image_path) as im:
+        width_px, height_px = im.size
+    aspect = height_px / float(width_px)
+    width_cm = float(max_width_cm)
+    height_cm = width_cm * aspect
+    if height_cm > max_height_cm:
+        height_cm = float(max_height_cm)
+        width_cm = height_cm / aspect
+    return width_cm, height_cm
+
+
+def add_figure(
+    anchor,
+    image_path,
+    caption_num,
+    caption_title,
+    source="compiled by the authors",
+    body_sect=None,
+    full_width=False,
+):
+    max_w = FULL_WIDTH_CM if full_width else COL_WIDTH_CM
+    width_cm, _height_cm = _picture_size_cm(image_path, max_w)
+    if full_width and body_sect is not None:
+        _column_break_paragraph(anchor, body_sect, 2)
+
     p = anchor.insert_paragraph_before()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.first_line_indent = Cm(0)
     p.paragraph_format.space_before = Pt(4)
     p.paragraph_format.keep_with_next = True
     run = p.add_run()
-    run.add_picture(str(image_path), width=Cm(COL_WIDTH_CM))
+    run.add_picture(str(image_path), width=Cm(width_cm))
 
     cap = anchor.insert_paragraph_before()
     cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -216,6 +270,9 @@ def add_figure(anchor, image_path, caption_num, caption_title, source="compiled 
     src.paragraph_format.space_after = Pt(6)
     rs = src.add_run(f"Source: {source}")
     _set_run_font(rs, 8, bold=True, italic=True)
+
+    if full_width and body_sect is not None:
+        _column_break_paragraph(anchor, body_sect, 1)
 
 
 # --------------------------------------------------------------------------- #
@@ -420,6 +477,7 @@ class Content:
     litreview: list
     aim: str
     objectives: list
+    contribution: list
     methods: dict
     results: dict
     discussion: list
@@ -437,6 +495,17 @@ def load_content(manuscript_path) -> Content:
         return " ".join(values)
 
     aim_paras = body["RESEARCH AIM AND OBJECTIVES"]["lead"]
+    objectives = [
+        re.sub(r"^\d+\.\s*", "", paragraph)
+        for paragraph in aim_paras
+        if re.match(r"^\d+\.\s+", paragraph)
+    ]
+    contribution = [
+        paragraph
+        for paragraph in aim_paras[1:]
+        if not re.match(r"^\d+\.\s+", paragraph)
+        and paragraph.strip() != "The research objectives are:"
+    ]
     return Content(
         title=one("TITLE"),
         abstract=one("ABSTRACT"),
@@ -449,11 +518,8 @@ def load_content(manuscript_path) -> Content:
         intro=body["INTRODUCTION"]["lead"],
         litreview=body["LITERATURE REVIEW AND PROBLEM STATEMENT"]["lead"],
         aim=aim_paras[0],
-        objectives=[
-            re.sub(r"^\d+\.\s*", "", paragraph)
-            for paragraph in aim_paras
-            if re.match(r"^\d+\.\s+", paragraph)
-        ],
+        objectives=objectives,
+        contribution=contribution,
         methods=body["MATERIALS AND METHODS"]["subsections"],
         results=body["RESEARCH RESULTS"]["subsections"],
         discussion=body["DISCUSSION OF RESULTS"]["lead"],
@@ -605,18 +671,54 @@ def build_sensitivity_table(tables_dir: Path) -> pd.DataFrame:
 # --------------------------------------------------------------------------- #
 # document assembly
 # --------------------------------------------------------------------------- #
+def _structured_abstract_specs(text: str, labels: list[str]):
+    """Build (text, bold, italic, size) runs with HAIT rubric labels bold at 9 pt."""
+    specs = []
+    remaining = text.strip()
+    ordered = sorted(labels, key=len, reverse=True)
+    while remaining:
+        match = None
+        for label in ordered:
+            if remaining.startswith(label):
+                match = label
+                break
+        if match is None:
+            specs.append((remaining, False, False, 9))
+            break
+        specs.append((match + " ", True, False, 9))
+        remaining = remaining[len(match) :].lstrip()
+        next_pos = len(remaining)
+        for label in ordered:
+            idx = remaining.find(label)
+            if idx != -1:
+                next_pos = min(next_pos, idx)
+        body = remaining[:next_pos].rstrip()
+        if body:
+            if not body.endswith(" "):
+                body = body + " "
+            specs.append((body, False, False, 9))
+        remaining = remaining[next_pos:].lstrip()
+    return specs
+
+
+def write_structured_abstract(paragraph, text: str, labels: list[str]):
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    paragraph.paragraph_format.first_line_indent = Cm(INDENT_CM)
+    rebuild_runs(paragraph, _structured_abstract_specs(text, labels))
+
+
 def rewrite_first_page(doc, content: Content):
     title_p = find_par(doc, lambda t: t.startswith("Markerless video-based golf-stick motion analysis using Kalman"))
     set_text(title_p, content.title)
 
     abstract_p = para_after_heading(doc, "ABSTRACT")
-    set_text(abstract_p, content.abstract)
+    write_structured_abstract(abstract_p, content.abstract, EN_ABSTRACT_LABELS)
 
     kw_p = find_par(doc, lambda t: t.startswith("Keywords:"))
     rebuild_runs(kw_p, [("Keywords: ", True, False, 9), (content.keywords, False, False, 9)])
 
     cite_p = find_par(doc, lambda t: t.startswith("For citation:"))
-    rebuild_runs(cite_p, [("For citation: ", True, True, 8), (content.citation_en, True, False, 8)])
+    rebuild_runs(cite_p, [("For citation: ", True, True, 8), (content.citation_en, False, False, 8)])
 
 
 def rewrite_ukrainian(doc, content: Content):
@@ -624,13 +726,13 @@ def rewrite_ukrainian(doc, content: Content):
     set_text(ua_title, content.ua_title)
 
     ua_abs = para_after_heading(doc, "АНОТАЦІЯ")
-    set_text(ua_abs, content.ua_abstract)
+    write_structured_abstract(ua_abs, content.ua_abstract, UK_ABSTRACT_LABELS)
 
     ua_kw = find_par(doc, lambda t: t.startswith("Ключові слова:"))
     rebuild_runs(ua_kw, [("Ключові слова: ", True, False, 9), (content.ua_keywords, False, False, 9)])
 
     ua_cite = find_par(doc, lambda t: t.startswith("Для цитування:"))
-    rebuild_runs(ua_cite, [("Для цитування: ", True, True, 8), (content.citation_ua, True, False, 8)])
+    rebuild_runs(ua_cite, [("Для цитування: ", True, True, 8), (content.citation_ua, False, False, 8)])
 
 
 def find_body_anchor(doc):
@@ -675,7 +777,15 @@ AI_DISCLOSURE = (
 def build_body(doc, anchor, body_sect, content: Content, fig_dir: Path, tables_dir: Path, agreement_dir: Path):
     def figure(number, source="compiled by the authors"):
         name, caption = FIGURE_TITLES[number]
-        add_figure(anchor, fig_dir / name, number, caption, source=source)
+        add_figure(
+            anchor,
+            fig_dir / name,
+            number,
+            caption,
+            source=source,
+            body_sect=body_sect,
+            full_width=number in FULL_WIDTH_FIGURES,
+        )
 
     def table(number, df, source="compiled by the authors"):
         add_table(
@@ -695,6 +805,8 @@ def build_body(doc, anchor, body_sect, content: Content, fig_dir: Path, tables_d
     add_body(anchor, content.aim)
     add_body(anchor, "The research objectives are:")
     add_numbered(anchor, content.objectives)
+    for text in content.contribution:
+        add_body(anchor, text)
 
     add_section_heading(anchor, "MATERIALS AND METHODS")
     for sub, texts in content.methods.items():
@@ -854,9 +966,11 @@ def rewrite_references_and_declarations(doc):
         "for the purposes reported here. No participant image is reproduced."
     )
     insert_statement(
-        "Data availability: Analysis code, derived aggregate tables, and de-identified "
-        "session-level outputs can be made available on request. Source demonstration "
-        "videos are not separately released as a public dataset in this submission."
+        "Data availability: Aggregate tables and diagnostic summaries supporting the findings "
+        "are reported in the article. Analysis code and de-identified session-level outputs are "
+        "available in the public repository https://github.com/ivansinuyk/vr_motion. Source "
+        "demonstration videos are available from the corresponding author on reasonable request "
+        "and are not released as a separate public video dataset in this submission."
     )
     remove_paragraph(template_ai)
 
@@ -874,6 +988,39 @@ def remove_missing_photo_placeholders(doc):
             if not photo_cell._tc.xpath(".//w:drawing"):
                 photo_cell.text = ""
 
+
+def embed_missing_author_photos(doc, photo_dir: Path = PHOTO_DIR):
+    """Embed Oleksii / Karthik photos into empty About-the-Authors cells in place."""
+    if not doc.tables:
+        return
+    author_table = doc.tables[-1]
+    mapping = {
+        "Oleksii": photo_dir / "oleksii_maksymov_3x4.jpg",
+        "Karthik": photo_dir / "karthik_iyer_3x4.jpg",
+        "Олексій": photo_dir / "oleksii_maksymov_3x4.jpg",
+        "Айєр": photo_dir / "karthik_iyer_3x4.jpg",
+    }
+    for row in author_table.rows:
+        if len(row.cells) < 2:
+            continue
+        photo_cell = row.cells[0]
+        bio = row.cells[1].text
+        if photo_cell._tc.xpath(".//a:blip"):
+            continue
+        target = None
+        for key, path in mapping.items():
+            if key in bio:
+                target = path
+                break
+        if target is None or not target.exists():
+            continue
+        # Clear placeholder text only; do not recreate the table.
+        photo_cell.text = ""
+        paragraph = photo_cell.paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = paragraph.add_run()
+        run.add_picture(str(target), width=Cm(PHOTO_WIDTH_CM))
+        print(f"embedded photo for: {bio.split('–')[0].strip()[:40]}")
 
 def main():
     parser = argparse.ArgumentParser(description="Build the article-2 HAIT DOCX.")
@@ -923,6 +1070,7 @@ def main():
     rewrite_ukrainian(doc, content)
     rewrite_references_and_declarations(doc)
     remove_missing_photo_placeholders(doc)
+    embed_missing_author_photos(doc)
 
     doc.save(str(output))
     print(f"saved {output}")

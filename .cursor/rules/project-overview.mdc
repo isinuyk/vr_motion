@@ -25,8 +25,8 @@ Main commands:
 Research/manuscript context:
 - **Master sync:** `article_package/research_publication_status.md` — Article 1/2 status, artifacts, future directions.
 - `article_package/` contains HAIT manuscript drafts, final DOCX candidates, evaluation CSVs, figures, and planning docs.
-- **Article 1** (method pipeline): `article_package/Стаття_Аспірант_Синюк_HAIT_aligned_final_v5.docx` (format-accepted; refs 23-30 cited in-text, RC/CV and smoothness-index definitions, AI-use in declarations). Prior versions `..._aligned_final_v4.docx` and `..._wordsafe_v3.docx` kept for reference.
-- **Article 2** (reference agreement + perturbation sensitivity): text source `article_package/second_article_manuscript.md`; **current DOCX** `article_package/Стаття_Аспірант_Синюк_HAIT_article2_v4.docx`; analysis bundle `second_article_outputs/v3/`; frozen fallbacks `article2_v2.docx`, `article2_v3.docx`. Builder: `build_second_article_docx.py`. Runbook (completed): `article2_post_annotation_publication_runbook.md`.
+- **Article 1** (method pipeline): current peer-review revision `article_package/Стаття_Аспірант_Синюк_HAIT_aligned_final_v7c.docx` (response table `Таблиця_відповідей_рецензентам_стаття1_v7c.docx`). Prior format-accepted `..._aligned_final_v5.docx`; older `..._aligned_final_v4.docx` / `..._wordsafe_v3.docx` kept for archival reference.
+- **Article 2** (reference agreement + perturbation sensitivity): text source `article_package/second_article_manuscript.md`; **current DOCX** `article_package/Стаття_Аспірант_Синюк_HAIT_article2_v6.docx`; analysis bundle `second_article_outputs/v3/`; frozen fallbacks `article2_v2.docx`–`article2_v5.docx`. Builder: `build_second_article_docx.py`. Runbook (completed): `article2_post_annotation_publication_runbook.md`.
 - `article_package/fix_hait_formatting.py` is the reusable HAIT formatter for Article 1 style; Article 2 uses `build_second_article_docx.py` (clone of v5 template). HAIT recipe: `second_article_plan_and_prompt.md` § HAIT Formatting Requirements.
 - Fig. 2 (Article 1) is illustrative only; Article 2 Fig. 2 is a schematic annotation frame.
 

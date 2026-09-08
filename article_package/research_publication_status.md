@@ -1,6 +1,6 @@
 # Research publication status (master sync)
 
-Last updated: **2026-09-02**. This file is the single place to see what each article is, where its artifacts live, and what remains before HAIT submission.
+Last updated: **2026-09-08**. This file is the single place to see what each article is, where its artifacts live, and what remains before HAIT submission.
 
 ---
 
@@ -8,8 +8,8 @@ Last updated: **2026-09-02**. This file is the single place to see what each art
 
 | # | Focus | Journal target | Status |
 |---|--------|----------------|--------|
-| **1** | Methodological pipeline (Kalman, RTS, metrics, diagnostic batch evaluation) | HAIT | **Format-accepted DOCX** (`Стаття_Аспірант_Синюк_HAIT_aligned_final_v5.docx`). Awaiting publication / DOI for ref [32] in Article 2. |
-| **2** | Reference-based 2D agreement, multi-rater protocol, perturbation sensitivity, production ablation | HAIT | **Mentor re-review:** `Стаття_Аспірант_Синюк_HAIT_article2_v4.docx`. Science + 58/72 mentor findings resolved; annotation provenance cleared. |
+| **1** | Methodological pipeline (Kalman, RTS, metrics, diagnostic batch evaluation) | HAIT | **Peer-review revision v7c** (`Стаття_Аспірант_Синюк_HAIT_aligned_final_v7c.docx`); response table `Таблиця_відповідей_рецензентам_стаття1_v7c.docx`. Prior format-accepted: `..._final_v5.docx`. |
+| **2** | Diagnostic evaluation: reference-based 2D agreement, multi-rater protocol, perturbation sensitivity, production ablation | HAIT | **Current:** `Стаття_Аспірант_Синюк_HAIT_article2_v6.docx` (preventive HAIT sync 2026-09-08). v5 kept as fallback. |
 | **3+** | Not started — see [Future article directions](#future-article-directions) | TBD | Plan after Article 2 acceptance. |
 
 ---
@@ -18,8 +18,11 @@ Last updated: **2026-09-02**. This file is the single place to see what each art
 
 | Artifact | Path |
 |----------|------|
-| Current HAIT DOCX | `article_package/Стаття_Аспірант_Синюк_HAIT_aligned_final_v5.docx` |
-| HAIT formatter base | `article_package/fix_hait_formatting.py` |
+| Current HAIT DOCX | `article_package/Стаття_Аспірант_Синюк_HAIT_aligned_final_v7c.docx` |
+| Prior format-accepted | `article_package/Стаття_Аспірант_Синюк_HAIT_aligned_final_v5.docx` |
+| Reviewer response table | `article_package/Таблиця_відповідей_рецензентам_стаття1_v7c.docx` |
+| Response-table builder | `article_package/build_response_table_v7.py` |
+| Paired ablation re-run | `article_package/evaluation_outputs/ablation_paired_v7/` |
 | Batch evaluation (Article 1 figures) | `article_package/evaluation_outputs/` |
 | HAIT recipe | `article_package/second_article_plan_and_prompt.md` § HAIT Formatting Requirements |
 
@@ -31,25 +34,31 @@ Last updated: **2026-09-02**. This file is the single place to see what each art
 
 ### Final title (EN)
 
-*Reference-Based 2D Agreement and Perturbation Sensitivity of a Markerless Video-Based Golf-Club Motion-Analysis Workflow under Heterogeneous Recording Conditions*
+*Diagnostic Evaluation of a Markerless Golf-Club Motion-Analysis Workflow: Reference-Based 2D Agreement and Perturbation Sensitivity*
+
+### Final title (UA)
+
+*Діагностичне оцінювання безмаркерного відеоаналізу руху ключки для гольфу: еталонна двовимірна узгодженість і чутливість до збурень*
 
 ### Manuscript and DOCX versions
 
 | Version | Path | Role |
 |---------|------|------|
 | Text source | `article_package/second_article_manuscript.md` | Canonical editable text |
-| **Current** | `article_package/Стаття_Аспірант_Синюк_HAIT_article2_v4.docx` | Ethics + AI disclosure; send to mentor |
+| **Current** | `article_package/Стаття_Аспірант_Синюк_HAIT_article2_v6.docx` | Preventive HAIT sync (structured abstracts 300–350, photos, table 11 pt, full-width figs, GitHub data); 2026-09-08 |
+| Fallback | `article_package/Стаття_Аспірант_Синюк_HAIT_article2_v5.docx` | Mentor repositioning (diagnostic baseline framing); 2026-09-02 edits |
+| Fallback | `article_package/Стаття_Аспірант_Синюк_HAIT_article2_v4.docx` | Pre-repositioning (ethics + AI disclosure) |
 | Fallback | `article_package/Стаття_Аспірант_Синюк_HAIT_article2_v3.docx` | Pre-ethics rebuild |
 | Frozen | `article_package/Стаття_Аспірант_Синюк_HAIT_article2_v2.docx` | Pre–multi-rater baseline (do not overwrite) |
-| PDF preview | `second_article_outputs/v3/article2_v4_preview.pdf` | 17 pages |
+| PDF preview | `second_article_outputs/v3/article2_v5_preview.pdf` | 19 pages |
 
 Build:
 
 ```powershell
 python build_second_article_docx.py
 python export_docx_preview.py `
-  --docx "article_package/Стаття_Аспірант_Синюк_HAIT_article2_v4.docx" `
-  --pdf "second_article_outputs/v3/article2_v4_preview.pdf"
+  --docx "article_package/Стаття_Аспірант_Синюк_HAIT_article2_v6.docx" `
+  --pdf "second_article_outputs/v3/article2_v6_preview.pdf"
 ```
 
 ### What was delivered (scope)
@@ -127,10 +136,14 @@ python verify_article2_numbers.py
 4. **Co-author approval** + HAIT Consent Form + Copyright License.
 5. **Optional:** participant/device metadata if recovered from project records.
 
-### Ethics / AI (v4)
+### Ethics / AI (v4+)
 
 - Ethics: anonymized public demonstration footage; no ethics-committee approval required (author-supplied statement in v4).
 - AI: GPT-5.6 Sol, Claude Opus 5, Cursor Grok 4.6 in Cursor (2026).
+
+### Mentor repositioning (v5, 2026-09-03)
+
+Applied from `Рекомендовані_правки_02 09 26.docx`: shorter diagnostic title (EN+UA), abstract/aim/objective-6 rewrite, new problem/contribution/production-object paragraphs, ablation discussion reframed as diagnostic evidence (not a rejection cue), Conclusions no longer invite editor rejection via “fix before submission as a validation study.” Analysis numbers unchanged.
 
 ---
 

@@ -154,7 +154,7 @@ The `article_package/` directory contains manuscript materials and generated fig
 ### Article 2 — reference agreement and perturbation sensitivity
 
 - text source: `second_article_manuscript.md`
-- **current DOCX:** `Стаття_Аспірант_Синюк_HAIT_article2_v4.docx` (mentor re-review)
+- **current DOCX:** `Стаття_Аспірант_Синюк_HAIT_article2_v5.docx` (mentor diagnostic repositioning)
 - fallbacks: `article2_v3.docx`, frozen `article2_v2.docx`
 - analysis + figures: `../second_article_outputs/v3/`
 - DOCX builder: `../build_second_article_docx.py`
